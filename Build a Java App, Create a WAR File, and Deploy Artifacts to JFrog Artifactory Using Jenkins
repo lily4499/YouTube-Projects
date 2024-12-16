@@ -1,0 +1,563 @@
+Build a Java App, Create a WAR File, and Deploy Artifacts to JFrog Artifactory Using Jenkins
+
+Introduction
+
+
+In this updated tutorial, we will build a Java web application that creates a .war file instead of a .jar file. 
+This WAR file will then be tested locally, and the process automated with Jenkins to deploy artifacts to JFrog Artifactory. We will also integrate static code analysis using SonarQube.
+
+Project Overview
+This tutorial will cover the following tasks:
+
+Building a Java web application and packaging it as a .war file using Maven.
+Configuring JFrog Artifactory with a settings.xml file for authentication.
+Updating the pom.xml file to handle WAR deployment to JFrog.
+Creating a Jenkinsfile to automate the CI/CD process.
+Performing static code analysis using SonarQube.
+Running the Jenkins pipeline and deploying the WAR file to JFrog Artifactory.
+Prerequisites
+Ensure you have the following tools and configurations:
+
+Java Development Kit (JDK): Install JDK 8 or higher.
+Maven: Install Apache Maven.
+Jenkins: Running on your local machine or server with these plugins:
+Pipeline
+Maven Integration
+SonarQube Scanner
+4. SonarQube Server: Installed and configured.
+
+5. JFrog Artifactory: An active instance of JFrog Artifactory.
+
+6. Git: Installed and configured on your machine.
+
+7. Docker (optional): For containerized builds.
+
+8. Tomcat server
+
+Folder Structure
+Below is the updated folder structure:
+
+/java-web-app
+    ├── src
+    │   ├── main
+    │   │   ├── java
+    │   │   │   └── com/example/webapp
+    │   │   │       └── HelloServlet.java
+    │   │   ├── webapp
+    │   │   │   ├── WEB-INF
+    │   │   │   │   └── web.xml
+    │   │   │   └── index.jsp
+    ├── pom.xml
+    ├── Jenkinsfile
+    ├── sonar-project.properties
+Step-by-Step Implementation
+Step 1: Build and Test the Application Locally
+Create the project directory:
+mvn archetype:generate -DgroupId=com.example -DartifactId=java-web-app -DarchetypeArtifactId=maven-archetype-webapp -DinteractiveMode=false
+
+mkdir -p java-web-app/src/main/java/com/example/webapp
+mkdir -p java-web-app/src/main/webapp/WEB-INF
+cd java-web-app
+Create a servlet, HelloServlet.java:
+
+
+vim src/main/java/com/example/webapp/HelloServlet.java
+
+package com.example.webapp;
+
+import java.io.IOException;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+public class HelloServlet extends HttpServlet {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.getWriter().write("<h1>Hello, Jenkins with WAR!</h1>");
+    }
+}
+Create a web.xml file in WEB-INF:
+
+<web-app xmlns="http://java.sun.com/xml/ns/javaee" version="3.0">
+    <servlet>
+        <servlet-name>HelloServlet</servlet-name>
+        <servlet-class>com.example.webapp.HelloServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>HelloServlet</servlet-name>
+        <url-pattern>/hello</url-pattern>
+    </servlet-mapping>
+</web-app>
+Create an index.jsp file in src/main/webapp:
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Welcome - Java App Project</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        h1 {
+            color: #4caf50;
+            text-transform: uppercase;
+            font-size: 2.5rem;
+            margin: 0;
+        }
+        p {
+            font-size: 1.2rem;
+            margin: 10px 0 20px 0;
+            color: #555;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            font-size: 1rem;
+            color: white;
+            background-color: #007bff;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to the Project</h1>
+    <p>Build A Java App and Deploy the Artifacts to JFROG Artifactory using Jenkins</p>
+    <a href="https://yourprojectlink.com" class="button">Get Started</a>
+</body>
+</html>
+Update the pom.xml to package a WAR file:
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example</groupId>
+  <artifactId>java-web-app</artifactId>
+  <packaging>war</packaging>
+  <version>1.0-SNAPSHOT</version>
+  <name>java-web-app Maven Webapp</name>
+  <url>http://maven.apache.org</url>
+
+  <properties>
+    <sonar.host.url>http://localhost:9000</sonar.host.url>
+    <sonar.login>sqa_0d9a3fd6426d58e092de6374af9baeaf72ebe88b</sonar.login>
+  </properties>
+
+  <dependencies>
+    <!-- JUnit for testing -->
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.13.2</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>javax.servlet</groupId>
+        <artifactId>javax.servlet-api</artifactId>
+        <version>4.0.1</version> <!-- Use the version that matches your server -->
+        <scope>provided</scope> <!-- Ensure the application server provides this dependency -->
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>java-web-app</finalName>
+    <plugins>
+      <!-- Compiler plugin to specify Java 17 version -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.8.1</version>
+        <configuration>
+          <source>17</source> <!-- Set to Java 17 -->
+          <target>17</target> <!-- Set to Java 17 -->
+        </configuration>
+      </plugin>
+
+      <!-- WAR plugin updated to a newer version -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-war-plugin</artifactId>
+        <version>3.3.2</version>
+      </plugin>
+      <plugin>
+        <groupId>org.sonarsource.scanner.maven</groupId>
+        <artifactId>sonar-maven-plugin</artifactId>
+        <version>3.9.1.2184</version> <!-- Replace with the latest version -->
+      </plugin>
+
+    </plugins>
+  </build>
+</project>
+Build the WAR file:
+
+mvn clean package
+Test application
+******Copy the WAR File into the Tomcat Container*****
+
+docker cp target/java-web-app.war tomcat:/usr/local/tomcat/webapps/
+
+docker restart tomcat
+#docker exec <container-id> sh -c "catalina.sh stop && catalina.sh start"
+
+http://<docker-container-ip>:8080/java-web-app/
+******OR Direct Deployment to Tomcat******
+
+. Add the Tomcat plugin to your pom.xml to allow deployment. For example:
+
+<build>
+    <plugins>
+        <!-- Other plugins -->
+
+        <plugin>
+            <groupId>org.apache.tomcat.maven</groupId>
+            <artifactId>tomcat7-maven-plugin</artifactId>
+            <version>2.2</version>
+            <configuration>
+                <url>http://localhost:8080/manager/text</url>
+                <server>TomcatServer</server>
+                <path>/java-web-app</path>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+. Add the Tomcat credentials to your settings.xml (usually located in ~/.m2/settings.xml):
+
+vim ~/.m2/settings.xml
+
+<servers>
+    <server>
+        <id>TomcatServer</id>
+        <username>admin</username>
+        <password>password</password>
+    </server>
+</servers>
+Replace admin and password with the credentials of your Tomcat Manager.
+
+. Deploy Using Maven
+
+After configuring the plugin and credentials, deploy the application with:
+
+mvn tomcat7:deploy
+
+#mvn tomcat7:redeploy
+#mvn tomcat7:undeploy
+#mvn clean package tomcat7:deploy
+
+#Verify the Deployment
+http://localhost:8080/java-web-app
+*******Automating Deployment in Jenkins**********
+
+If you’re using Jenkins for automation without SSH, you can leverage docker cp or the Tomcat Manager directly.
+
+pipeline {
+    agent any
+    environment {
+        TOMCAT_URL = 'http://localhost:8080/manager/text'
+        TOMCAT_USER = 'admin'
+        TOMCAT_PASSWORD = 'password'
+        CONTAINER_ID = 'your-tomcat-container-id' // Replace with your container ID or name
+    }
+    stages {
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('Deploy via Tomcat Manager') {
+            steps {
+                sh """
+                curl -u ${TOMCAT_USER}:${TOMCAT_PASSWORD} -T target/your-app.war \
+                ${TOMCAT_URL}/deploy?path=/your-app&update=true
+                """
+            }
+        }
+        stage('Deploy via Docker Copy') {
+            steps {
+                sh """
+                docker cp target/your-app.war ${CONTAINER_ID}:/usr/local/tomcat/webapps/
+                docker exec ${CONTAINER_ID} catalina.sh stop
+                docker exec ${CONTAINER_ID} catalina.sh start
+                """
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
+*****Using Docker Volumes for Deployment*******
+If you’ve configured a bind mount for Tomcat’s webapps directory during container creation, you can simply copy the WAR file directly into the mounted directory:
+
+Bind Mount Tomcat’s Webapps Directory
+
+docker run -d -p 8080:8080 -v $(pwd)/webapps:/usr/local/tomcat/webapps tomcat
+Copy the WAR File
+
+cp target/your-app.war ./webapps/
+*****If not container: SSH access to the Tomcat server if required.********
+1. Configure SSH Access
+
+On your local machine or Jenkins server:
+
+ssh-keygen -t rsa -b 4096 -C "your-email@example.com"
+Copy the public key to the Tomcat server using:
+
+ssh-copy-id user@tomcat-server-ip
+
+ssh user@tomcat-server-ip
+2. Set Up Tomcat for Deployment
+
+Make sure the user has permissions to the webapps directory:
+
+sudo chown -R user:user /path/to/tomcat/webapps
+If Maven deploy isn’t used, you can SCP (secure copy) the WAR file directly to the Tomcat webapps directory:
+
+scp target/your-app.war user@tomcat-server-ip:/path/to/tomcat/webapps/
+3. Integrate SSH in Jenkins
+
+Kind: SSH Username with private key.
+Username: user (Tomcat server username).
+Private Key: Paste the private key (~/.ssh/id_rsa).
+Update Jenkinsfile
+Use the SSH credentials to copy the file to the server and restart Tomcat.
+pipeline {
+    agent any
+    environment {
+        SSH_CREDENTIALS = 'your-ssh-credentials-id' // Jenkins credentials ID
+        TOMCAT_SERVER = 'user@tomcat-server-ip'
+        WEBAPPS_DIR = '/path/to/tomcat/webapps'
+    }
+    stages {
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('Deploy') {
+            steps {
+                sshagent(credentials: [SSH_CREDENTIALS]) {
+                    sh """
+                    scp target/your-app.war ${TOMCAT_SERVER}:${WEBAPPS_DIR}/
+                    ssh ${TOMCAT_SERVER} 'sudo systemctl restart tomcat'
+                    """
+                }
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
+4. Additional Configuration
+
+sudo systemctl enable tomcat
+sudo systemctl start tomcat
+
+sudo ufw allow 8080
+Step 2: Create settings.xml in JFrog
+The settings.xml file provides the credentials to authenticate with these repositories.
+
+In JFrog, navigate to Admin > Configuration > Settings.
+Generate a settings.xml file with your credentials and repository details.
+Save the file in your local Maven directory (~/.m2/settings.xml).
+Or create it manually:
+
+vim ~/.m2/settings.xml
+
+<settings>
+  <servers>
+    <server>
+      <id>central</id>
+      <username>your-google-email@gmail.com</username>
+      <password>your-generated-identity-token</password>
+    </server>
+    <server>
+       <id>snapshots</id>
+      <username>your-google-email@gmail.com</username>
+      <password>your-generated-identity-token</password>
+    </server>
+  </servers>
+</settings>
+*****Use settings.xml as a Jenkins Secret File*****
+Add the settings.xml File to Jenkins Credentials
+
+cp ~/.m2/settings.xml /mnt/c/Users/lilia/Desktop/settings.xml
+Go to Jenkins Dashboard > Manage Jenkins > Manage Credentials.
+Select the appropriate scope (e.g., Global or Folder-specific).
+Click Add Credentials.
+Choose the Secret file type.
+Upload your settings.xml file.
+Provide an ID (e.g., jfrog-settings-secret) and optional description, then save.
+Step 3: Configure pom.xml for Artifact Deployment
+The <distributionManagement> section in pom.xml tells Maven where to deploy artifacts.
+
+Add the distribution management section to pom.xml:
+<distributionManagement>
+    <repository>
+        <id>central</id>
+        <name>a0gmvfpojdmwy-artifactory-primary-0-releases</name>
+        <url>https://liliane.jfrog.io/artifactory/demo-app</url>
+    </repository>
+    <snapshotRepository>
+        <id>snapshots</id>
+        <name>a0gmvfpojdmwy-artifactory-primary-0-snapshots</name>
+        <url>https://liliane.jfrog.io/artifactory/demo-app</url>
+    </snapshotRepository>
+</distributionManagement>
+Step 4: Create the Jenkinsfile
+Create a Jenkinsfile in the project root:
+pipeline {
+    agent any
+
+    environment {
+        MAVEN_HOME = '/usr/share/maven'
+        GIT_REPO = 'https://github.com/lily4499/Java-web-app.git'  // Corrected repository URL
+        GIT_BRANCH = 'main'  // Replace with your branch name if different
+        TOMCAT_URL = 'http://localhost:8081/manager/text'
+        TOMCAT_USER = 'admin'
+        TOMCAT_PASSWORD = 'abc123'
+        CONTAINER_ID = 'tomcat' // Replace with your container ID or name
+    }
+
+    stages {
+        
+        stage('Clone Repository') {
+            steps {
+                git branch: "${env.GIT_BRANCH}",
+                    url: "${env.GIT_REPO}",
+                    // credentialsId: 'github-token'  // Replace with your Jenkins GitHub credentials ID
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh "${env.MAVEN_HOME}/bin/mvn clean install"
+            }
+        }
+
+         stage('Run Sonarqube') {
+            environment {
+                scannerHome = tool 'sonar-scanner';
+            }
+            steps {
+              withSonarQubeEnv(credentialsId: 'sonar-token', installationName: 'sonar-server') {
+                sh "${scannerHome}/bin/sonar-scanner -Dproject.settings=sonar-project.properties"
+              }
+            }
+        }
+
+        stage('Deploy App via Tomcat Manager') {
+            steps {
+                sh """
+                curl -u ${TOMCAT_USER}:${TOMCAT_PASSWORD} -T target/your-app.war \
+                ${TOMCAT_URL}/deploy?path=/your-app&update=true
+                """
+            }
+        }
+       
+        stage('Deploy to Artifactory') {
+            steps {
+                withCredentials([file(credentialsId: 'jfrog-settings-secret', variable: 'SETTINGS_FILE')]) {
+                    sh """
+                        mvn deploy -s $SETTINGS_FILE
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline completed.'
+        }
+    }
+}
+Step 5: Integrate SonarQube for Static Code Analysis
+*********Setup SonarQube Locally***********
+Add the SonarQube Plugin to pom.xml: Add the following plugin in your pom.xml:
+
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.sonarsource.scanner.maven</groupId>
+            <artifactId>sonar-maven-plugin</artifactId>
+            <version>3.9.1.2184</version> <!-- Check for latest version -->
+        </plugin>
+    </plugins>
+</build>
+Configure sonar-project.properties: Create a sonar-project.properties file in the root directory of your Maven project with the following details:
+
+sonar.projectKey=demo-app-project
+sonar.host.url=http://localhost:9000
+sonar.login=<your_sonar_token>
+Run the Analysis: Execute the following Maven command to analyze your project locally:
+
+mvn clean verify sonar:sonar
+Replace <your_sonar_token> with the token you generated from SonarQube.
+
+********Setup SonarQube in a Jenkins Pipeline*************
+Prerequisites:
+
+The SonarQube Scanner plugin is installed in Jenkins in Jenkins (Manage Jenkins > Tools > Add SonarQube Scanner).
+A SonarQube server is configured in Jenkins (Manage Jenkins > Configure System > SonarQube servers).
+Authentication Token: Generate a token in SonarQube (My Account > Security > Generate Token) and save it in Jenkins credentials as “Secret text”.
+Create a sonar-project.properties file in the root directory of your Maven project with the following details
+sonar.projectKey=demo-app-project
+An example Jenkinsfile that integrates SonarQube for a Maven project:
+
+stage('Run Sonarqube') {
+            environment {
+                scannerHome = tool 'sonar-scanner';
+            }
+            steps {
+              withSonarQubeEnv(credentialsId: 'sonar-token', installationName: 'sonar-server') {
+                sh "${scannerHome}/bin/sonar-scanner -Dproject.settings=sonar-project.properties"
+              }
+            }
+        }
+Step 6: Run the Jenkins Pipeline
+Init, Commit and push your Java-web-app to the GitHub repository.
+
+echo "# Java-web-app" >> README.md
+git init
+git add .
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/lily4499/Java-web-app.git
+git push -u origin main
+Configure the Jenkins job to pull from GitHub.
+
+Run the pipeline.
+
+Verify the following:
+
+The app is accessible locally at http://localhost:8080/java-web-app.
+http://localhost:8080/java-web-app/hello.
+
+The WAR file is uploaded to JFrog Artifactory
+
+
