@@ -206,6 +206,8 @@ spec:
 Create a cluster:
 ```bash
 eksctl create cluster --name my-node-cluster --region <your-region> --nodes 2
+eksctl create cluster --name my-node-cluster --region <your-region> --nodes 2 --node-type t4g.micro
+
 ```
 
 Configure `kubectl` to use the new cluster:
