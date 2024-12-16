@@ -1,0 +1,238 @@
+# Build and Deploy a Node.js Application to Production using Kubernetes and EKS
+
+## Introduction
+We will walk through building a Node.js application from scratch and deploying it to production using Docker, 
+AWS Elastic Container Registry (ECR), and Kubernetes (EKS). By the end, you'll have a fully functional, production-ready application accessible through your browser.
+
+## Project Overview
+We will create a simple Node.js application with a welcome page styled for production. 
+After testing the application locally, we will dockerize it, push the image to ECR, create a Kubernetes cluster using `eksctl`, and deploy the application to the cluster.
+
+## Prerequisites
+
+1. AWS account
+2. AWS CLI configured
+3. eksctl installed
+4. Docker installed
+5. kubectl installed
+6. Node.js and npm installed
+7. An IDE or code editor (e.g., VS Code)
+
+## Folder Structure
+```
+project-directory/
+├── Dockerfile
+├── app.js
+├── package.json
+├── public/
+│   ├── css/
+│   │   └── style.css
+│   └── index.html
+└── kubernetes/
+    └── deployment.yaml
+```
+
+---
+
+## Key Tasks
+
+### 1. Install Node.js
+Install Node.js and npm:
+```bash
+sudo apt update
+sudo apt install -y nodejs npm
+```
+Verify installation:
+```bash
+node -v
+npm -v
+```
+
+### 2. Initialize the Application
+Create a project directory and initialize a Node.js application:
+```bash
+mkdir my-node-app && cd my-node-app
+npm init -y
+```
+
+### 3. Install Dependencies
+Install Express.js to handle HTTP requests:
+```bash
+npm install express
+```
+
+### 4. Create an Application File
+Create a file named `app.js`:
+```javascript
+const express = require('express');
+const path = require('path');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+});
+```
+
+Create a `public` folder with the following structure:
+```
+public/
+├── css/
+│   └── style.css
+└── index.html
+```
+
+#### `public/css/style.css`
+```css
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    margin-top: 50px;
+}
+h1 {
+    color: #4CAF50;
+}
+```
+
+#### `public/index.html`
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/style.css">
+    <title>Welcome</title>
+</head>
+<body>
+    <h1>Welcome to My Node.js Application!</h1>
+</body>
+</html>
+```
+
+### 5. Test the Application Locally
+Start the application:
+```bash
+node app.js
+```
+Visit: `http://localhost:3000` to see the welcome page.
+
+### 6. Dockerize the Application
+Create a `Dockerfile` in the project root:
+```dockerfile
+# Use Node.js LTS as the base image
+FROM node:18-alpine
+
+# Set the working directory
+WORKDIR /usr/src/app
+
+# Copy package.json and install dependencies
+COPY package.json .
+RUN npm install --production
+
+# Copy application files
+COPY . .
+
+# Expose port 3000 and start the app
+EXPOSE 3000
+CMD ["node", "app.js"]
+```
+
+### 7. Build and Push Image to a Docker Registry (ECR)
+1. Authenticate Docker with ECR:
+```bash
+aws ecr get-login-password --region <your-region> | docker login --username AWS --password-stdin <account-id>.dkr.ecr.<your-region>.amazonaws.com
+```
+
+2. Create an ECR repository:
+```bash
+aws ecr create-repository --repository-name my-node-app
+```
+
+3. Build and tag the Docker image:
+```bash
+docker build -t my-node-app .
+docker tag my-node-app:latest <account-id>.dkr.ecr.<your-region>.amazonaws.com/my-node-app:latest
+```
+
+4. Push the image:
+```bash
+docker push <account-id>.dkr.ecr.<your-region>.amazonaws.com/my-node-app:latest
+```
+
+### 8. Create a Kubernetes Manifest File
+Create a `kubernetes/deployment.yaml` file:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-node-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: my-node-app
+  template:
+    metadata:
+      labels:
+        app: my-node-app
+    spec:
+      containers:
+      - name: my-node-app
+        image: <account-id>.dkr.ecr.<your-region>.amazonaws.com/my-node-app:latest
+        ports:
+        - containerPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-node-app-service
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 3000
+  selector:
+    app: my-node-app
+```
+
+### 9. Create a Kubernetes Cluster Using `eksctl`
+Create a cluster:
+```bash
+eksctl create cluster --name my-node-cluster --region <your-region> --nodes 2
+```
+
+Configure `kubectl` to use the new cluster:
+```bash
+aws eks update-kubeconfig --region <your-region> --name my-node-cluster
+```
+
+### 10. Deploy the Application onto the Kubernetes Cluster
+Apply the Kubernetes manifest:
+```bash
+kubectl apply -f kubernetes/deployment.yaml
+```
+
+Verify deployment:
+```bash
+kubectl get pods
+kubectl get svc
+```
+
+### 11. Test Your Deployed Application
+Copy the `EXTERNAL-IP` from the service:
+```bash
+kubectl get svc
+```
+Access the application in your browser using the `EXTERNAL-IP`.
+
+---
+
+Congratulations! You have successfully built, dockerized, and deployed a Node.js application to production using Kubernetes and EKS.
+
