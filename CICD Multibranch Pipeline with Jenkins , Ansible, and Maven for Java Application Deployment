@@ -1,0 +1,348 @@
+CICD Multibranch Pipeline with Jenkins , Ansible, and Maven for Java Application Deployment
+
+Introduction
+A Multibranch Pipeline in Jenkins automatically detects branches in your code repository and creates pipelines for each branch.
+
+It also detects code changes in each branch (e.g., main, dev, feature-x) and triggers the pipeline to run builds and tests only for the updated branch.
+
+Objective
+To create a multibranch pipeline using Jenkins (containerized) and Ansible that:
+
+Automatically discovers branches in a Git repository.
+Builds a Java application using Maven.
+Configures DEV and PROD servers with Tomcat.
+Deploys the application to both servers.
+Folder Structure
+Your project directory is structured as follows:
+
+~/ansible-tomcat-install-deploy
+├── Jenkinsfile (used for all branches)
+├── ansible
+│   ├── deploy_app.yml
+│   ├── install_tomcat.yml
+│   └── inventory.ini
+├── demo-app
+│   ├── pom.xml
+│   ├── src
+│   └── target
+Create AWS instances for targets servers:
+aws ec2 run-instances --image-id ami-0c7217cdde317cfec --count 1 --instance-type t2.micro \
+--key-name ec2-devops-key --security-group-ids sg-091906568d27d3894 --subnet-id subnet-062bafb72ff1b9c71 --tag-specifications \
+'ResourceType=instance,Tags=[{Key=Name,Value=Ubuntu-Dev}]'
+
+aws ec2 run-instances --image-id ami-0c7217cdde317cfec --count 1 --instance-type t2.micro \
+--key-name ec2-devops-key --security-group-ids sg-091906568d27d3894 --subnet-id subnet-062bafb72ff1b9c71 --tag-specifications \
+'ResourceType=instance,Tags=[{Key=Name,Value=Ubuntu-Prod}]'
+
+ssh -i /home/lilia/ec2-devops-key.pem ubuntu@18.206.168.252
+Using Bash Shell script to create instances:
+
+vim ec2.sh
+
+#!/bin/bash
+
+# Launch Dev instance
+DEV_INSTANCE=$(aws ec2 run-instances --image-id ami-0c7217cdde317cfec --count 1 --instance-type t2.micro \
+--key-name ec2-devops-key --security-group-ids sg-091906568d27d3894 --subnet-id subnet-062bafb72ff1b9c71 \
+--tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=Ubuntu-Dev}]' \
+--query 'Instances[0].InstanceId' --output text)
+
+echo "Dev Instance ID: $DEV_INSTANCE"
+
+# Launch Prod instance
+PROD_INSTANCE=$(aws ec2 run-instances --image-id ami-0c7217cdde317cfec --count 1 --instance-type t2.micro \
+--key-name ec2-devops-key --security-group-ids sg-091906568d27d3894 --subnet-id subnet-062bafb72ff1b9c71 \
+--tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=Ubuntu-Prod}]' \
+--query 'Instances[0].InstanceId' --output text)
+
+echo "Prod Instance ID: $PROD_INSTANCE"
+
+# Wait for the instances to be in running state
+echo "Waiting for instances to be in running state..."
+aws ec2 wait instance-running --instance-ids $DEV_INSTANCE $PROD_INSTANCE
+
+# Fetch and display the public IPs
+DEV_PUBLIC_IP=$(aws ec2 describe-instances --instance-ids $DEV_INSTANCE --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+PROD_PUBLIC_IP=$(aws ec2 describe-instances --instance-ids $PROD_INSTANCE --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+
+echo "Dev Instance Public IP: $DEV_PUBLIC_IP"
+echo "Prod Instance Public IP: $PROD_PUBLIC_IP"
+bash ec2.sh
+
+Run a custom Jenkins Container with maven, java and ansible installed:
+docker run -d --name jenkins \
+  -p 9090:9090 -p 50000:50000 \
+  -p 2221:22 \
+  --network docker-network \
+  -v jenkins_home:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(which docker):/usr/bin/docker \
+  --group-add $(getent group docker | cut -d: -f3) \
+  custom-jenkins-ssh:latest
+Access Jenkins at http://localhost:8080 and install the following plugins:
+docker exec -it jenkins-container bash
+cat /var/jenkins_home/secrets/initialAdminPassword
+exit
+. Install Required Plugins:
+
+Git
+SSH Agent
+Pipeline
+GitHub Branch Source
+Ansible
+Add PEM key as a Jenkins credential to access target servers:
+Kind: SSH Username with Private Key
+Username: ubuntu (or the appropriate username for the servers)
+Private Key: Paste the PEM file contents or upload the file.
+Note the credentials ID (e.g., ec2-devops-key).
+Configure Ansible
+Inventory File (ansible/inventory.ini)
+
+[servers]
+54.172.91.71 ansible_user=ubuntu
+98.84.137.168 ansible_user=ubuntu
+Do not specify ansible_ssh_private_key_file in the inventory because Jenkins injects the private key from the credential automatically.
+
+Playbook for Installing Tomcat (ansible/install_tomcat.yml)
+
+---
+- name: Install and Configure Tomcat
+  hosts: all
+  become: yes
+  tasks:
+    - name: Update the system packages
+      apt:
+        update_cache: yes
+
+    - name: Install OpenJDK 17
+      apt:
+        name: openjdk-17-jdk
+        state: present
+
+    - name: Download Tomcat tarball
+      get_url:
+        url: https://dlcdn.apache.org/tomcat/tomcat-10/v10.1.33/bin/apache-tomcat-10.1.33.tar.gz
+        dest: /tmp/apache-tomcat-10.1.33.tar.gz
+
+    - name: Extract Tomcat tarball
+      unarchive:
+        src: /tmp/apache-tomcat-10.1.33.tar.gz
+        dest: /tmp
+        remote_src: yes
+
+    - name: Remove existing Tomcat directory
+      ansible.builtin.file:
+        path: /opt/tomcat/apache-tomcat-10.1.33
+        state: absent
+    
+    
+    - name: Move Tomcat to /opt directory
+      command:
+        cmd: mv /tmp/apache-tomcat-10.1.33 /opt/tomcat
+
+    - name: Set permissions for Tomcat directory
+      file:
+        path: /opt/tomcat
+        state: directory
+        mode: '0755'
+        recurse: yes
+
+    - name: Change ownership of Tomcat directory
+      ansible.builtin.file:
+        path: /opt/tomcat
+        state: directory
+        recurse: yes
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Update tomcat-users.xml with user credentials
+      blockinfile:
+        path: /opt/tomcat/conf/tomcat-users.xml
+        marker: ""
+        block: |
+          <tomcat-users>
+              <role rolename="manager-gui"/>
+              <role rolename="admin-gui"/>
+              <user username="admin" password="abc123" roles="manager-gui,admin-gui"/>
+          </tomcat-users>
+
+    - name: Comment out <Valve> element in Manager App's context.xml
+      replace:
+        path: /opt/tomcat/webapps/manager/META-INF/context.xml
+        regexp: '<Valve className="org.apache.catalina.valves.RemoteAddrValve".*?/>'
+        replace: '<!-- <Valve className="org.apache.catalina.valves.RemoteAddrValve" /> -->'
+
+    - name: Comment out <Valve> element in Host Manager's context.xml
+      replace:
+        path: /opt/tomcat/webapps/host-manager/META-INF/context.xml
+        regexp: '<Valve className="org.apache.catalina.valves.RemoteAddrValve".*?/>'
+        replace: '<!-- <Valve className="org.apache.catalina.valves.RemoteAddrValve" /> -->'
+
+
+    - name: Start Tomcat
+      command: /opt/tomcat/bin/startup.sh
+Playbook for Deploying Application (ansible/deploy_app.yml)
+
+---
+- name: Deploy WAR to Tomcat
+  hosts: all
+  become: yes
+  vars:
+    tmp_path: /tmp/demo-app.war
+  tasks:
+    - name: Verify if WAR file exists in Jenkins workspace
+      ansible.builtin.stat:
+        path: "{{ workspace_path }}/demo-app/target/demo-app.war"
+      delegate_to: localhost
+      register: war_file
+
+    - name: Fail if WAR file is missing
+      ansible.builtin.fail:
+        msg: "WAR file not found at {{ workspace_path }}/demo-app/target/demo-app.war"
+      when: not war_file.stat.exists
+
+    - name: Copy WAR file from Jenkins workspace to a temporary location
+      ansible.builtin.command:
+        cmd: cp {{ workspace_path }}/demo-app/target/demo-app.war {{ tmp_path }}
+      delegate_to: localhost
+      when: war_file.stat.exists
+
+    - name: Transfer WAR file to target host
+      ansible.builtin.copy:
+        src: "{{ tmp_path }}"
+        dest: /opt/tomcat/webapps/demo-app.war
+
+    - name: Stop Tomcat if running
+      ansible.builtin.shell:
+        cmd: /opt/tomcat/bin/shutdown.sh
+      ignore_errors: yes
+
+    - name: Start Tomcat
+      ansible.builtin.shell:
+        cmd: /opt/tomcat/bin/startup.sh
+Jenkinsfile
+A single Jenkinsfile is used across branches. Modify the behavior based on the branch name using the BRANCH_NAME variable.
+
+Ensure the Jenkinsfile is in the root directory of all branches.
+pipeline {
+    agent any
+
+    environment {
+        ANSIBLE_HOST_KEY_CHECKING = "False"
+    }
+
+    stages {
+        stage('Determine Environment') {
+            steps {
+                script {
+                    // Set the DEPLOY_ENV dynamically based on the branch name
+                    env.DEPLOY_ENV = BRANCH_NAME == 'main' ? 'PROD' : 'DEV'
+                }
+                echo "Deploy environment set to: ${DEPLOY_ENV}"
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                echo "Building application on branch: ${BRANCH_NAME}"
+                sh 'cd demo-app && mvn clean package'
+            }
+        }
+
+        stage('Configure Servers') {
+            steps {
+                echo "Configuring ${DEPLOY_ENV} server with Tomcat..."
+                sshagent(['ec2-devops-key']) {
+                    ansiblePlaybook playbook: "ansible/install_tomcat.yml", 
+                                     inventory: 'ansible/inventory.ini',
+                                     extraVars: [
+                                         workspace_path: "${WORKSPACE}"
+                                     ]
+                }
+            }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                echo "Deploying application to ${DEPLOY_ENV} server on branch: ${BRANCH_NAME}"
+                sshagent(['ec2-devops-key']) {
+                    ansiblePlaybook playbook: "ansible/deploy_app.yml", 
+                                     inventory: 'ansible/inventory.ini',
+                                     extraVars: [
+                                         workspace_path: "${WORKSPACE}"
+                                     ]
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline for branch ${BRANCH_NAME} completed."
+        }
+    }
+}
+Ensure the ansiblePlaybook step in your Jenkinsfile uses the correct credentialsId
+
+Git Repository Setup
+Create or Use an Existing Git Repository:
+
+Add the project folder (~/ansible-tomcat) to your Git repository:
+git init
+git add .
+git commit -m "Initial commit for multibranch pipeline project"
+git remote add origin https://github.com/lily4499/ansible-tomcat.git
+git branch main
+git branch dev
+git branch prod
+git push origin main dev prod
+Jenkins Multibranch Pipeline Job
+Create a Multibranch Pipeline Job
+Go to Dashboard and click New Item.
+Enter a name for your job (e.g., My-Multibranch-Pipeline).
+Select Multibranch Pipeline.
+Click OK.
+Configure the Job
+In the configuration page:
+Branch Sources:
+
+Click Add Source > Git.
+Enter the repository URL (e.g., https://github.com/user/repo.git).
+If the repository is private, add credentials.
+Discover Branches:
+
+By default, Jenkins will scan all branches. You can customize this using filters (e.g., include/exclude specific branches).
+Build Configuration:
+
+Jenkins automatically looks for a Jenkinsfile in the root of each branch. Ensure your repository contains a valid Jenkinsfile.
+Scan Multibranch Pipeline Triggers:
+
+Configure triggers to scan for changes (e.g., Periodic Scan every 1 hour).
+Save and Build
+Click Save.
+Jenkins will automatically scan the repository for branches containing a Jenkinsfile.
+Each branch with a valid Jenkinsfile will appear as a separate job under the multibranch pipeline.
+View Job Results
+Click on the multibranch pipeline job.
+You can see individual branch jobs and their build statuses.
+Save the configuration. Jenkins will scan the repository and create pipelines for main, dev, and prod.
+
+
+
+
+Test and Validate
+Push changes to your Git repository.
+
+Jenkins will automatically detect and execute pipelines for the main, dev, and prod branches.
+
+Verify deployments by accessing:
+
+DEV: http://<dev-server-ip>:8080/demo-app
+PROD: http://<prod-server-ip>:8080/demo-app
+
+
+Conclusion
+The CI/CD Multibranch Pipeline with Jenkins, Ansible, and Maven ensures every branch in your project has its own automated build and deployment process.
+
+This setup saves time, catches issues early, and guarantees smooth, consistent deployments across all branches.
+
