@@ -1,0 +1,211 @@
+Automate Static Website Deployment with Ansible on AWS Ubuntu
+
+
+Introduction
+Objective: “In this tutorial, we’ll automate the deployment of a static web application onto an AWS Ubuntu server using Ansible.”
+Value Proposition: “By the end of this video, you’ll learn how to create and deploy an Nginx-based static web app with a custom server block configuration, all managed seamlessly through Ansible.”
+Project Overview
+What You’ll Build:
+
+A static web application.
+Hosted on an AWS EC2 instance running Ubuntu.
+Managed and deployed using Ansible.
+Components:
+
+Static HTML/CSS application.
+Nginx for web server configuration.
+Ansible for automation.
+Prerequisites
+An AWS account.
+An Ubuntu Control Node (your local machine or another server).
+Python and Ansible installed on the Control Node:
+sudo apt update
+sudo apt install -y python3 python3-pip
+pip3 install ansible
+An AWS Ubuntu EC2 instance with:
+
+SSH access set up.
+A security group with port 22 (SSH) and 80 (HTTP) open.
+Folder Structure
+Your project directory should look like this:
+
+ansible-deployment/
+│
+├── ansible.cfg
+├── inventory
+├── playbook.yml
+├── files/
+│   ├── index.html
+│   ├── styles.css
+│
+└── templates/
+    └── nginx.conf.j2
+Agenda
+Create the Sample Application.
+
+Create an Nginx configuration for the server block.
+
+Set up the Ansible playbook.
+
+Install necessary packages like Nginx.
+Copy application files.
+Apply and enable a custom Nginx configuration.
+Open port 80 on UFW.
+Set up handlers for the Nginx service.
+Run the playbook and access the application.
+
+Step 1: Create the Sample Application
+Create a directory for the app files:
+
+mkdir -p ansible-deployment/files
+cd ansible-deployment/files
+Create index.html:
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="welcome-container">
+        <h1>Welcome to Ansible Automated Deployment!</h1>
+        <p>Your deployment process is now fully automated and production-ready.</p>
+        <button class="cta-button">Learn More</button>
+    </div>
+</body>
+</html>
+Create styles.css:
+
+/* General body styles */
+body {
+    font-family: 'Arial', sans-serif;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(to bottom right, #4CAF50, #2196F3);
+    color: #fff;
+}
+
+/* Container for the welcome message */
+.welcome-container {
+    margin-top: 20%;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    display: inline-block;
+}
+
+/* Button style */
+.cta-button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 1rem;
+    font-weight: bold;
+    color: #4CAF50;
+    background-color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+}
+
+.cta-button:hover {
+    background-color: #4CAF50;
+    color: #fff;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+Step 2: Create an Nginx Configuration File for the Server Block
+Create the Nginx template file:
+
+mkdir -p ../templates
+nano ../templates/nginx.conf.j2
+Add the following content:
+
+server {
+    listen 80;
+    server_name {{ ansible_host }};
+    root /var/www/html;
+
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+Step 3: Set Up the Ansible Playbook
+Create the ansible.cfg file:
+
+nano ../ansible.cfg
+
+[defaults]
+inventory = inventory
+host_key_checking = False
+Create the inventory file:
+
+nano ../inventory
+[webserver]
+3.89.45.67 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/aws_key.pem
+Create the playbook.yml:
+
+nano ../playbook.yml
+
+---
+- hosts: webserver
+  become: true
+  tasks:
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+        update_cache: true
+
+    - name: Copy application files
+      copy:
+        src: files/
+        dest: /var/www/html/
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Apply custom Nginx configuration
+      template:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/sites-available/default
+
+    - name: Enable Nginx configuration
+      file:
+        path: /etc/nginx/sites-enabled/default
+        src: /etc/nginx/sites-available/default
+        state: link
+
+    - name: Open port 80 on UFW
+      ufw:
+        rule: allow
+        port: 80
+        proto: tcp
+
+  handlers:
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
+Step 4: Run the Playbook and Access the Application
+Run the playbook:
+
+ansible-playbook playbook.yml
+
+Verify Nginx is running:
+
+sudo systemctl status nginx
+
+Access the application:
+
+Open your browser and navigate to: http://<EC2 Public IP>.
+
+
+Outro
+Recap: “We automated the deployment of a static web application using Ansible on an AWS Ubuntu server.”
