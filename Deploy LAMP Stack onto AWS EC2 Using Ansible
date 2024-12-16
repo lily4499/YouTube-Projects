@@ -1,0 +1,191 @@
+Deploy LAMP Stack onto AWS EC2 Using Ansible
+
+Introduction
+LAMP stack is a group of software tools used together to build websites and web applications. 
+It includes Linux (the operating system), Apache (the web server), MySQL (the database), and PHP (the programming language).
+Example: If you're creating a blog, LAMP stack lets Linux host your website, Apache serve your blog to visitors, 
+MySQL store your posts and user data, and PHP handle how everything looks and works on the website.
+
+Prerequisites
+AWS Account: Ensure you have an active AWS account.
+Control Node: A system (Linux/Windows with WSL) where Ansible is installed and configured.
+IAM Role/Access: AWS CLI configured with credentials that have permissions to launch EC2 instances.
+SSH Key: An SSH key pair created for accessing the EC2 instance.
+
+Agenda
+Explain Architecture
+Create a Remote Host
+Create a Remote User with Sudo Privileges
+Install Ansible on the Control Node
+Set Up Ansible Playbook and Create the Plays, Tasks
+Run the Playbook
+Navigate to Browser and Check the Application
+
+Folder Structure
+project-lamp-stack/
+├── inventory/
+│   └── hosts
+├── playbooks/
+│   ├── lamp_setup.yml
+│   └── roles/
+│       └── lamp/
+│           ├── tasks/
+│           │   └── main.yml
+│           ├── templates/
+│           │   └── index.php.j2
+│           └── vars/
+│               └── main.yml
+├── README.md
+└── ansible.cfg
+
+Step 1: Explain Architecture
+The architecture involves the following components:
+Control Node: This is your local machine where Ansible is installed and configured.
+Remote Hosts: AWS EC2 instances acting as target servers where the LAMP stack will be installed.
+LAMP Stack:
+Linux: The operating system on the EC2 instances (e.g., Ubuntu/CentOS).
+Apache: A web server for serving web content.
+MySQL: A database management system to store application data.
+PHP: A server-side scripting language to process dynamic content.
+
+Ansible Playbook: Automates the installation and configuration of the LAMP stack on the EC2 instances.
+
+Step 2: Create a Remote Host
+DEV_INSTANCE=$(aws ec2 run-instances --image-id ami-0c7217cdde317cfec --count 1 --instance-type t2.micro \
+--key-name ec2-devops-key --security-group-ids sg-091906568d27d3894 --subnet-id subnet-062bafb72ff1b9c71 \
+--tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=Ubuntu-Dev}]' \
+--query 'Instances[0].InstanceId' --output text)
+
+echo "Dev Instance ID: $DEV_INSTANCE"
+
+ DEV_PUBLIC_IP=$(aws ec2 describe-instances --instance-ids $DEV_INSTANCE --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+
+ echo "Dev Instance Public IP: $DEV_PUBLIC_IP"
+
+aws ec2 terminate-instances --instance-ids $DEV_INSTANCE
+
+Step 3: Create a Remote User and configure it for ssh
+ssh -i ec2-devops-key.pem ubuntu@<public-ip>
+sudo adduser ansible
+echo "ansible ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/ansible
+sudo mkdir -p /home/ansible/.ssh
+sudo cp ~/.ssh/authorized_keys /home/ansible/.ssh/
+sudo chown -R ansible:ansible /home/ansible/.ssh
+sudo chmod 700 /home/ansible/.ssh
+sudo chmod 600 /home/ansible/.ssh/authorized_keys
+exit
+
+#Test SSH Login for the ansible User
+ssh -i ec2-devops-key.pem ansible@54.82.104.186
+
+#Test the Ansible Connection
+ansible lamp -m ping -i inventory/hosts
+
+Step 4: Install Ansible on the Control Node
+On your local control node, install Ansible:
+sudo apt update
+sudo apt install ansible -y
+
+ansible --version
+
+Step 5: Set Up Ansible Playbook and Create the Plays, Tasks
+mkdir project-lamp-stack && cd project-lamp-stack
+mkdir inventory playbooks
+touch inventory/hosts
+touch README.md ansible.cfg
+touch playbooks/lam_setup.yml
+mkdir -p playbooks/roles/lamp/tasks
+touch playbooks/roles/lamp/tasks/main.yml
+mkdir -p playbooks/roles/lamp/templates
+touch playbooks/roles/lamp/templates/index.php.j2
+mkdir -p playbooks/roles/lamp/vars
+touch playbooks/roles/lamp/vars/main.yml
+
+------------------------
+$ vim inventory/hosts
+[lamp]
+<public-ip> ansible_user=ansible ansible_ssh_private_key_file=~/.ssh/ec2-devops-key.pem
+
+------------------
+Configure ansible.cfg:
+$ vim ansible.cfg
+[defaults]
+inventory = inventory/hosts
+
+--------------------
+Create the playbook: playbooks/lamp_setup.yml
+$ playbooks/lamp_setup.yml
+- hosts: lamp
+  become: yes
+  roles:
+    - lamp
+
+---------------------
+Define tasks in roles/lamp/tasks/main.yml
+$ vim roles/lamp/tasks/main.yml
+- name: Update packages
+  apt:
+    update_cache: yes
+
+- name: Install Apache packages
+  apt:
+    name: "{{ apache_packages }}"
+    state: present
+
+- name: Install PHP
+  apt:
+    name: "{{ php_packages }}"
+    state: present
+
+- name: Install MySQL Server
+  apt:
+    name: mysql-server
+    state: present
+
+- name: Copy PHP file to server
+  template:
+    src: index.php.j2
+    dest: /var/www/html/index.php
+
+- name: Start Apache Service
+  service:
+    name: apache2
+    state: started
+    enabled: yes
+
+-------------------------
+vim playbooks/roles/lamp/vars/main.yml
+---
+# Variables for the LAMP stack role
+# Package names
+
+apache_packages:
+  - apache2
+
+php_packages:
+  - php
+  - libapache2-mod-php
+
+--------------------
+Create a sample PHP file: roles/lamp/templates/index.php.j2:
+$ vim roles/lamp/templates/index.php.j2
+<?php
+phpinfo();
+?>
+
+Step 6: Run the Playbook
+Run the playbook:
+ansible-playbook playbooks/lamp_setup.yml
+
+ansible-playbook playbooks/lamp_setup.yml -i inventory/hosts
+
+Monitor the output for success messages.
+
+Step 7: Navigate to Browser
+http://<EC2-Instance-IP>/index.php
+
+You should see the PHP info page confirming the LAMP stack is operational.
+
+Conclusion
+You have successfully deployed a LAMP stack on an AWS EC2 instance using Ansible.
+This process demonstrates the power of automation tools in setting up and configuring server environments efficiently.
