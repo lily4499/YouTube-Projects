@@ -205,8 +205,18 @@ spec:
 ### 9. Create a Kubernetes Cluster Using `eksctl`
 Create a cluster:
 ```bash
-eksctl create cluster --name my-node-cluster --region <your-region> --nodes 2
-eksctl create cluster --name my-node-cluster --region <your-region> --nodes 2 --node-type t4g.micro
+eksctl create cluster --name my-node-cluster --region <your-region> --nodes 1 --node-type t4g.micro
+or
+eksctl create cluster \
+  --name my-cluster \
+  --region us-east-1 \
+  --version 1.27 \
+  --nodegroup-name managed-node-group \
+  --node-type t3.medium \
+  --nodes 1 \
+  --nodes-min 1 \
+  --nodes-max 2 \
+  --managed
 
 ```
 
@@ -214,8 +224,25 @@ Configure `kubectl` to use the new cluster:
 ```bash
 aws eks update-kubeconfig --region <your-region> --name my-node-cluster
 ```
+### 10. Create a Docker registry secret (my-pull-secret) for AWS Elastic Container Registry (ECR)
+kubectl create secret docker-registry my-pull-secret \
+  --docker-server=<account_id>.dkr.ecr.<region>.amazonaws.com \
+  --docker-username=AWS \
+  --docker-password=$(aws ecr get-login-password --region <region>) \
+  --docker-email=<email>
 
-### 10. Deploy the Application onto the Kubernetes Cluster
+Then reference this secret in your Pod or Deployment YAML under imagePullSecrets:
+```yaml
+spec:
+  containers:
+  - name: my-app
+    image: myregistry/myapp:latest
+  imagePullSecrets:
+  - name: my-pull-secret
+
+
+
+### 11. Deploy the Application onto the Kubernetes Cluster
 Apply the Kubernetes manifest:
 ```bash
 kubectl apply -f kubernetes/deployment.yaml
@@ -227,7 +254,7 @@ kubectl get pods
 kubectl get svc
 ```
 
-### 11. Test Your Deployed Application
+### 12. Test Your Deployed Application
 Copy the `EXTERNAL-IP` from the service:
 ```bash
 kubectl get svc
