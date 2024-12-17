@@ -80,7 +80,10 @@ spec:
       port: 80
       targetPort: 80
   type: LoadBalancer
+
+
 MySQL Deployment and Service
+
 # mysql-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -124,7 +127,9 @@ spec:
     - protocol: TCP
       port: 3306
       targetPort: 3306
+
 PHP Deployment and Service
+
 # php-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -161,7 +166,9 @@ spec:
 
 3. Create a Kubernetes Cluster (Local/Cloud)
 Local Cluster
+
 Using Minikube:
+
 minikube start
 
 # Start Minikube
@@ -169,6 +176,7 @@ minikube start --driver=docker
 
 # Verify the cluster
 kubectl get nodes
+
 Cloud Cluster
 Using GKE:
 gcloud container clusters create lamp-cluster --num-nodes=3
