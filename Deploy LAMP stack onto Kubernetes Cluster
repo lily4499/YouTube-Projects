@@ -1,6 +1,8 @@
 Introduction
 
-Welcome to this tutorial on deploying a LAMP (Linux, Apache, MySQL, PHP) stack onto a Kubernetes Cluster using Minikube. This step-by-step guide will walk you through building, deploying, and managing a fully functional LAMP application hosted on Kubernetes. By the end, you'll have a clear understanding of how to containerize, deploy, and scale a LAMP stack on Minikube.
+Welcome to this tutorial on deploying a LAMP (Linux, Apache, MySQL, PHP) stack onto a Kubernetes Cluster using Minikube. 
+This step-by-step guide will walk you through building, deploying, and managing a fully functional LAMP application hosted on Kubernetes. 
+By the end, you'll have a clear understanding of how to containerize, deploy, and scale a LAMP stack on Minikube.
 Objective
 
 The objective of this project is to:
@@ -101,6 +103,80 @@ Stop Containers:
 
     docker-compose down
 
+
+
+
+
+********************
+
+To use phpdotenv to load .env values into your PHP environment, follow these steps:
+Step-by-Step Guide
+1. Install phpdotenv
+
+Use Composer to install the vlucas/phpdotenv library in your project:
+
+composer require vlucas/phpdotenv
+
+2. Create a .env File
+
+Create a .env file in the root of your project to store sensitive environment variables.
+
+Example .env file:
+
+DB_HOST=localhost
+DB_NAME=expense_tracker
+DB_USER=root
+DB_PASSWORD=rootpassword
+
+3. Update Your PHP Code
+
+Modify your PHP script to use phpdotenv for loading environment variables.
+
+<?php
+require __DIR__ . '/vendor/autoload.php';
+
+use Dotenv\Dotenv;
+
+// Load .env file
+$dotenv = Dotenv::createImmutable(__DIR__);
+$dotenv->load();
+
+// Get environment variables
+$host = getenv('DB_HOST') ?: 'localhost';
+$db = getenv('DB_NAME') ?: 'expense_tracker';
+$user = getenv('DB_USER') ?: 'root';
+$password = getenv('DB_PASSWORD') ?: '';
+
+ini_set('memory_limit', '256M'); // Increase memory limit
+
+try {
+
+    $conn = new PDO("mysql:host=$host;dbname=$db;charset=utf8mb4", $user, $password);
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    echo "Connected successfully!";
+} catch (PDOException $e) {
+    die("Database connection failed: " . $e->getMessage());
+}
+?>
+
+4. Folder Structure
+
+Ensure your project has the following structure:
+
+project-root/
+├── .env
+├── composer.json
+├── vendor/
+└── index.php
+
+5. Run the Application
+
+Start your PHP server (e.g., using php -S) or integrate with your web server (Apache or Nginx). If you are using Docker, ensure the .env file is included in the container.
+
+
+
+
+************************
 Step 4: Create YAML Manifest Files
 
     Create a Namespace:
@@ -166,7 +242,129 @@ Apache Deployment:
             ports:
             - containerPort: 80
 
-    Add Services, ConfigMap, and PVC files.
+*************************************************************************************
+
+Add Services, ConfigMap, and PVC files.
+
+1. Services
+MySQL Service
+
+This service ensures MySQL is accessible to other components in the Kubernetes cluster.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: lamp-namespace
+spec:
+  selector:
+    app: mysql
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
+  clusterIP: None # Enables headless service for stable network identity
+
+Apache Service
+
+This service exposes the Apache server to external traffic using a LoadBalancer or NodePort.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: apache
+  namespace: lamp-namespace
+spec:
+  selector:
+    app: apache
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: NodePort
+
+2. ConfigMap
+
+The ConfigMap stores non-sensitive configuration data such as database credentials or other environment variables.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lamp-config
+  namespace: lamp-namespace
+data:
+  DB_HOST: "mysql"
+  DB_NAME: "expense_tracker"
+  DB_USER: "root"
+  DB_PASSWORD: "rootpassword"
+
+3. Persistent Volume Claims (PVC)
+MySQL PVC
+
+This PVC ensures persistent storage for MySQL data.
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+  namespace: lamp-namespace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+Apache PVC (Optional)
+
+If you need persistent storage for Apache (e.g., for uploaded files), use a PVC:
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: apache-pvc
+  namespace: lamp-namespace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+How to Apply These Files
+
+    Save the above YAML definitions into files in your k8s/ directory:
+        k8s/mysql-service.yaml
+        k8s/apache-service.yaml
+        k8s/configmap.yaml
+        k8s/mysql-pvc.yaml
+        k8s/apache-pvc.yaml
+
+    Apply them using kubectl:
+
+kubectl apply -f k8s/mysql-service.yaml
+kubectl apply -f k8s/apache-service.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/mysql-pvc.yaml
+kubectl apply -f k8s/apache-pvc.yaml
+
+Verify Resources
+
+    Check Services:
+
+kubectl get services -n lamp-namespace
+
+Check ConfigMaps:
+
+kubectl get configmap -n lamp-namespace
+
+Check PVCs:
+
+    kubectl get pvc -n lamp-namespace
+
+
+
+****************************************
 
 Step 5: Create Kubernetes Cluster
 
@@ -228,4 +426,166 @@ Stop Minikube:
 
 Conclusion
 
-This tutorial provided a hands-on experience deploying a LAMP stack on Kubernetes with Minikube. You learned how to containerize, deploy, and manage an expense tracker application in a Kubernetes environment. Let me know your thoughts in the comments below, and don’t forget to like and subscribe!
+This tutorial provided a hands-on experience deploying a LAMP stack on Kubernetes with Minikube. 
+You learned how to containerize, deploy, and manage an expense tracker application in a Kubernetes environment.
+Let me know your thoughts in the comments below, and don’t forget to like and subscribe!
+
+
+
+
+**************************************************************
+
+
+1. Create a Secret for Database Credentials
+
+Use the kubectl create secret command or define a Secret in a YAML file.
+Option 1: Using kubectl create secret
+
+Run the following command to create a Secret directly:
+
+kubectl create secret generic db-credentials \
+  --from-literal=DB_USER=root \
+  --from-literal=DB_PASSWORD=rootpassword \
+  --from-literal=DB_NAME=expense_tracker \
+  --namespace=lamp-namespace
+
+Option 2: Define in a YAML File
+
+Alternatively, create a YAML file (db-credentials.yaml):
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: lamp-namespace
+type: Opaque
+data:
+  DB_USER: cm9vdA==                # Base64 encoded value of "root"
+  DB_PASSWORD: cm9vdHBhc3N3b3Jk   # Base64 encoded value of "rootpassword"
+  DB_NAME: ZXhwZW5zZV90cmFja2Vy   # Base64 encoded value of "expense_tracker"
+
+    Base64 Encoding: You must encode the values before adding them to the YAML file. Use the following command to encode values:
+
+    echo -n 'root' | base64
+
+Apply the Secret:
+
+kubectl apply -f db-credentials.yaml
+
+2. Update Deployments to Use Secrets
+MySQL Deployment
+
+Update the MySQL Deployment to use the Secret values as environment variables:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: lamp-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:5.7
+        env:
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: DB_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: DB_PASSWORD
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: DB_NAME
+        volumeMounts:
+        - name: mysql-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-storage
+        persistentVolumeClaim:
+          claimName: mysql-pvc
+
+Apache Deployment
+
+The Apache Deployment can also use the Secret for environment variables:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apache
+  namespace: lamp-namespace
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: apache
+  template:
+    metadata:
+      labels:
+        app: apache
+    spec:
+      containers:
+      - name: apache
+        image: php:7.4-apache
+        env:
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: DB_PASSWORD
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: DB_NAME
+        ports:
+        - containerPort: 80
+
+3. Verify the Secrets are Applied
+
+    List Secrets:
+
+kubectl get secrets -n lamp-namespace
+
+Inspect Secret (Values will be Base64 encoded):
+
+kubectl describe secret db-credentials -n lamp-namespace
+
+Decode a Secret Value: To verify a specific value:
+
+    kubectl get secret db-credentials -n lamp-namespace -o jsonpath="{.data.DB_USER}" | base64 --decode
+
+4. Benefits of Using Secrets
+
+    Security: Secrets are stored in Base64 encoded format and can be encrypted at rest using Kubernetes secrets encryption.
+    Dynamic Updates: You can update Secret values without modifying the application code or deployment configurations.
+    Centralized Management: Secrets allow you to manage sensitive information centrally in Kubernetes.
+
+5. Cleanup
+
+To delete the Secret when no longer needed:
+
+kubectl delete secret db-credentials -n lamp-namespace
+
+This setup ensures your database credentials are securely managed and accessible to your Kubernetes workloads.
+
+
