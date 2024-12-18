@@ -1,0 +1,231 @@
+Introduction
+
+Welcome to this tutorial on deploying a LAMP (Linux, Apache, MySQL, PHP) stack onto a Kubernetes Cluster using Minikube. This step-by-step guide will walk you through building, deploying, and managing a fully functional LAMP application hosted on Kubernetes. By the end, you'll have a clear understanding of how to containerize, deploy, and scale a LAMP stack on Minikube.
+Objective
+
+The objective of this project is to:
+
+    Deploy a LAMP stack on a local Kubernetes cluster using Minikube.
+    Clone and test an expense tracker application locally using Docker Compose.
+    Create Kubernetes YAML manifests for the LAMP stack components.
+    Manage deployments, nodes, pods, and services using kubectl.
+    Test and verify the application on a browser.
+    Learn cleanup processes to keep your Kubernetes environment tidy.
+
+Project Overview
+
+We will use the following components:
+
+    Application: Expense Tracker app (PHP-based application)
+    Backend: MySQL database
+    Webserver: Apache HTTP Server
+    Cluster: Minikube (local Kubernetes environment)
+
+The application will be accessible via a browser after deployment.
+Prerequisites
+
+    Installed Tools:
+        Minikube
+        kubectl
+        Docker
+        Docker Compose
+        Git
+    Environment:
+        A Linux or macOS system with at least 4 GB of RAM and 20 GB of free storage.
+        Internet connectivity for cloning and downloading dependencies.
+
+Folder Structure
+
+Below is the recommended folder structure for the project:
+
+lamp-kubernetes
+│
+├── docker-compose.yml        # Docker Compose file for local testing
+├── k8s                       # Kubernetes YAML manifests
+│   ├── lamp-namespace.yaml   # Namespace configuration
+│   ├── mysql-deployment.yaml # MySQL Deployment
+│   ├── apache-deployment.yaml# Apache Deployment
+│   ├── service.yaml          # Services for MySQL & Apache
+│   ├── configmap.yaml        # ConfigMap for database configurations
+│   └── pvc.yaml              # Persistent Volume Claims
+├── scripts                   # Utility scripts for testing and cleanup
+│   ├── cleanup.sh            # Cleanup script for resources
+│   └── deploy.sh             # Script to deploy all resources
+└── expense-tracker-app       # Cloned GitHub repository for the application
+
+Agenda
+
+    Introduction and Overview
+    Explain the Architecture of the LAMP stack.
+    Clone the Expense Tracker App from GitHub.
+    Build and test the app locally using Docker Compose.
+    Create YAML manifest files for Kubernetes.
+    Deploy the LAMP stack on Minikube.
+    Manage resources (deployments, nodes, pods, services) using kubectl.
+    Test the application stack on a browser.
+    Clean up Kubernetes resources.
+
+Demo Steps
+Step 1: Explain the Architecture
+
+The architecture consists of:
+
+    MySQL Database:
+        Stores the application data.
+        Persistent storage is configured via Persistent Volume (PV) and Persistent Volume Claims (PVC).
+    Apache Web Server:
+        Hosts the PHP application.
+        Exposes the application via a LoadBalancer service.
+    Kubernetes Resources:
+        Namespace for isolation.
+        Deployments for Apache and MySQL.
+        Services for inter-component communication.
+
+Step 2: Clone the Expense Tracker App
+
+# Clone the repository
+git clone https://github.com/example/expense-tracker-app.git
+cd expense-tracker-app
+
+Step 3: Build and Test Locally Using Docker Compose
+
+    View Docker Compose File: Ensure the docker-compose.yml is configured with MySQL and PHP (Apache).
+
+    Start the Containers:
+
+docker-compose up --build
+
+Access on Browser: Open http://localhost in your browser to test the app.
+
+Stop Containers:
+
+    docker-compose down
+
+Step 4: Create YAML Manifest Files
+
+    Create a Namespace:
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lamp-namespace
+
+MySQL Deployment:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: lamp-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:5.7
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: rootpassword
+        - name: MYSQL_DATABASE
+          value: expenses
+        volumeMounts:
+        - mountPath: /var/lib/mysql
+          name: mysql-pv
+      volumes:
+      - name: mysql-pv
+        persistentVolumeClaim:
+          claimName: mysql-pvc
+
+Apache Deployment:
+
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: apache
+      namespace: lamp-namespace
+    spec:
+      replicas: 2
+      selector:
+        matchLabels:
+          app: apache
+      template:
+        metadata:
+          labels:
+            app: apache
+        spec:
+          containers:
+          - name: apache
+            image: php:7.4-apache
+            ports:
+            - containerPort: 80
+
+    Add Services, ConfigMap, and PVC files.
+
+Step 5: Create Kubernetes Cluster
+
+Start Minikube:
+
+minikube start
+
+Step 6: Deploy the Application
+
+    Apply the namespace:
+
+kubectl apply -f k8s/lamp-namespace.yaml
+
+Deploy MySQL:
+
+kubectl apply -f k8s/mysql-deployment.yaml
+
+Deploy Apache:
+
+kubectl apply -f k8s/apache-deployment.yaml
+
+Apply Services:
+
+    kubectl apply -f k8s/service.yaml
+
+Step 7: Manage Resources
+
+    Check Deployments:
+
+kubectl get deployments -n lamp-namespace
+
+Check Pods:
+
+kubectl get pods -n lamp-namespace
+
+Check Services:
+
+kubectl get services -n lamp-namespace
+
+Access Application: Get Minikube IP:
+
+    minikube ip
+
+    Access the app on http://<Minikube_IP>:<NodePort>.
+
+Step 8: Test the Application
+
+    Verify the application works by adding some expenses and checking the database updates.
+
+Step 9: Clean Up
+
+    Delete Resources:
+
+kubectl delete namespace lamp-namespace
+
+Stop Minikube:
+
+    minikube stop
+
+Conclusion
+
+This tutorial provided a hands-on experience deploying a LAMP stack on Kubernetes with Minikube. You learned how to containerize, deploy, and manage an expense tracker application in a Kubernetes environment. Let me know your thoughts in the comments below, and don’t forget to like and subscribe!
