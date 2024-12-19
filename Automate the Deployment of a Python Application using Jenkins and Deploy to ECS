@@ -1,0 +1,244 @@
+# Automate the Deployment of a Python Application using Jenkins and Deploy to ECS
+
+## Introduction
+
+In this tutorial, we will demonstrate how to automate the deployment of a Python application using Jenkins and deploy it
+to Amazon ECS (Elastic Container Service). This project highlights the power of CI/CD pipelines to streamline application deployment and achieve scalability with containerized environments.
+
+## Objective
+
+The objective is to set up a CI/CD pipeline using Jenkins to build, test, and deploy a Python application on Amazon ECS. 
+The process will automate image building, storage in Amazon ECR, and deployment to an ECS cluster.
+
+---
+
+## Project Overview
+
+1. Setup Jenkins and configure required plugins.
+2. Clone the Python application, test it locally, and Dockerize it.
+3. Automate the build process using a Jenkins pipeline.
+4. Push the Docker image to Amazon ECR.
+5. Create and configure an ECS cluster and task definition.
+6. Deploy the application to ECS and test it on a browser.
+
+---
+
+## Prerequisites
+
+- AWS account with IAM permissions for ECS, ECR, and EC2.
+- Python installed locally.
+- Docker installed locally.
+- Jenkins installed and configured.
+- AWS CLI installed and configured.
+- Git installed locally.
+
+---
+
+## Folder Structure
+
+```plaintext
+/home/user/python-app/
+  |-- app.py
+  |-- requirements.txt
+  |-- Dockerfile
+  |-- Jenkinsfile
+```
+
+---
+
+## Key Tasks
+
+### Step 1: Setup Jenkins
+
+- **Install Plugins**:
+  - Docker Pipeline
+  - Pipeline: AWS Steps
+  - Amazon ECR
+
+- **Create Credentials in Jenkins**:
+  - Add AWS credentials (Access Key and Secret Key) in Jenkins.
+  - Add DockerHub credentials (if needed).
+
+---
+
+### Step 2: Clone Application to Local and Test the Application
+
+**Clone the Repository:**
+```bash
+cd /home/user
+git clone <repository-url> python-app
+cd python-app
+```
+
+**Install Dependencies:**
+```bash
+pip install -r requirements.txt
+```
+
+**Run Application Locally:**
+```bash
+python app.py
+```
+
+**Test:** Access the application on `http://localhost:5000`.
+
+---
+
+### Step 3: Dockerize the Application
+
+**Create a Dockerfile:**
+```dockerfile
+FROM python:3.9-slim
+WORKDIR /app
+COPY . /app
+RUN pip install -r requirements.txt
+CMD ["python", "app.py"]
+```
+
+**Build and Test the Docker Image Locally:**
+```bash
+docker build -t python-app:latest .
+docker run -p 5000:5000 python-app:latest
+```
+
+**Test:** Access the application on `http://localhost:5000`.
+
+---
+
+### Step 4: Create a Jenkinsfile for Automating the Build of the Python Image
+
+**Jenkinsfile:**
+```groovy
+pipeline {
+    agent any
+
+    environment {
+        REGISTRY_URL = "<account-id>.dkr.ecr.<region>.amazonaws.com"
+        IMAGE_NAME = "python-app"
+    }
+
+    stages {
+        stage('Clone Code') {
+            steps {
+                git url: '<repository-url>'
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    dockerImage = docker.build("$REGISTRY_URL/$IMAGE_NAME")
+                }
+            }
+        }
+        stage('Login to ECR') {
+            steps {
+                sh "aws ecr get-login-password --region <region> | docker login --username AWS --password-stdin $REGISTRY_URL"
+            }
+        }
+        stage('Push to ECR') {
+            steps {
+                script {
+                    dockerImage.push("latest")
+                }
+            }
+        }
+    }
+}
+```
+
+---
+
+### Step 5: Create a Pipeline Job in Jenkins
+
+1. Go to Jenkins dashboard and create a new pipeline job.
+2. Add the repository URL and select `Jenkinsfile` as the pipeline script.
+3. Save and build the job.
+
+---
+
+### Step 6: Push the Built Image to Amazon ECR
+
+1. **Create an ECR Repository:**
+```bash
+aws ecr create-repository --repository-name python-app --region <region>
+```
+2. **Verify Image in ECR:**
+```bash
+aws ecr list-images --repository-name python-app
+```
+
+---
+
+### Step 7: Create ECS Cluster
+
+1. **Create a Cluster:**
+```bash
+aws ecs create-cluster --cluster-name python-app-cluster
+```
+
+2. **Verify Cluster:**
+```bash
+aws ecs list-clusters
+```
+
+---
+
+### Step 8: Create Task Definition and Run Task
+
+1. **Create Task Definition File:**
+```json
+{
+  "family": "python-app-task",
+  "networkMode": "awsvpc",
+  "containerDefinitions": [
+    {
+      "name": "python-app",
+      "image": "<account-id>.dkr.ecr.<region>.amazonaws.com/python-app:latest",
+      "memory": 512,
+      "cpu": 256,
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 5000,
+          "hostPort": 5000
+        }
+      ]
+    }
+  ],
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512"
+}
+```
+
+2. **Register Task Definition:**
+```bash
+aws ecs register-task-definition --cli-input-json file://task-definition.json
+```
+
+3. **Run the Task:**
+```bash
+aws ecs run-task --cluster python-app-cluster --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[subnet-id],securityGroups=[sg-id],assignPublicIp=ENABLED}" --task-definition python-app-task
+```
+
+---
+
+### Step 9: Test Application on Browser
+
+1. Retrieve the public IP of the ECS service:
+```bash
+aws ecs describe-tasks --cluster python-app-cluster
+```
+
+2. Access the application on `http://<public-ip>:5000`.
+
+---
+
+## Demo
+
+Walk through each step, showing the CLI commands, Jenkins UI configurations, and testing the application in the browser. Ensure the deployment works flawlessly and is accessible publicly.
+
+---
+
+With this guide, you now have a fully automated deployment pipeline for a Python application using Jenkins and AWS ECS.
+
