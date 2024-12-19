@@ -163,7 +163,7 @@ docker tag my-node-app:latest <account-id>.dkr.ecr.<your-region>.amazonaws.com/m
 
 4. Push the image:
 ```bash
-docker push <account-id>.dkr.ecr.<your-region>.amazonaws.com/my-node-app:latest
+docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION .amazonaws.com/my-node-app:latest
 ```
 
 ### 8. Create a Kubernetes Manifest File
@@ -185,7 +185,9 @@ spec:
     spec:
       containers:
       - name: my-node-app
-        image: <account-id>.dkr.ecr.<your-region>.amazonaws.com/my-node-app:latest
+        image: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION .amazonaws.com/my-node-app:latest
+      imagePullSecrets:
+      - name: ecr-secret
         ports:
         - containerPort: 3000
 ---
@@ -224,7 +226,8 @@ Configure `kubectl` to use the new cluster:
 ```bash
 aws eks update-kubeconfig --region <your-region> --name my-node-cluster
 ```
-### 10. Create a Docker registry secret (my-pull-secret) for AWS Elastic Container Registry (ECR)
+### 10. Set Up  EKS nodes to pull images from ECR
+Create a Docker registry secret (my-pull-secret) for AWS Elastic Container Registry (ECR)
 kubectl create secret docker-registry my-pull-secret \
   --docker-server=<account_id>.dkr.ecr.<region>.amazonaws.com \
   --docker-username=AWS \
