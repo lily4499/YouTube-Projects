@@ -291,6 +291,12 @@ kubectl get svc
 ```
 Access the application in your browser using the `EXTERNAL-IP`.
 
+kubectl delete all --all
+kubectl delete -f kubernetes/deployment.yaml
+kubectl delete secret <secret-name>
+eksctl delete cluster --name eks-cluster
+
+
 ---
 
 Congratulations! You have successfully built, dockerized, and deployed a Node.js application to production using Kubernetes and EKS.
