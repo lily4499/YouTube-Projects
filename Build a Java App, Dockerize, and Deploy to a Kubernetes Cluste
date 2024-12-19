@@ -1,0 +1,222 @@
+# YouTube Tutorial: Build a Java App, Dockerize, and Deploy to a Kubernetes Cluster
+
+## **Introduction**
+
+Welcome to this step-by-step tutorial where you will learn how to build a Java web application, 
+package it into a Docker container, and deploy it to a Kubernetes cluster. 
+This guide is designed for beginners and will walk you through every detail of the process.
+
+## **Objective**
+
+By the end of this tutorial, you will have a running Java application deployed in a Kubernetes cluster, accessible via a browser.
+
+## **Project Overview**
+
+We’ll work with a Java web application hosted on GitHub. The process includes building the application using Maven, 
+containerizing it with Docker, pushing the image to a public registry, and deploying it to a Kubernetes cluster.
+
+## **Prerequisites**
+
+Before starting, ensure you have the following tools installed:
+
+- Java (JDK 8 or higher)
+- Maven
+- Docker
+- Minikube
+- kubectl (Kubernetes CLI)
+- A GitHub account (for cloning the repository)
+
+### **Folder Structure**
+
+The folder structure after cloning the application will look like this:
+
+```
+Java-web-app/
+├── src
+│   └── main
+│       ├── java
+│       │   └── com
+│       │       └── example
+│       │           └── app
+│       └── webapp
+│           ├── WEB-INF
+│           └── index.jsp
+├── pom.xml
+└── Dockerfile
+```
+
+## **Key Tasks**
+
+1. Setup and install prerequisites.
+2. Clone the Java web application from GitHub.
+3. Build the application using Maven.
+4. Test the application locally.
+5. Dockerize the application.
+6. Deploy the Docker image to a public registry.
+7. Create a Kubernetes cluster using Minikube.
+8. Create deployment and service manifest files.
+9. Deploy the application to Kubernetes and test it.
+
+
+---
+
+## **Demo Steps**
+
+### **1. Setup**
+
+- Verify installations:
+
+```bash
+java -version
+mvn -version
+docker --version
+minikube version
+kubectl version --client
+```
+
+### **2. Clone the Application**
+
+Clone the Java web application from GitHub:
+
+```bash
+git clone https://github.com/lily4499/Java-web-app.git
+cd Java-web-app
+```
+
+### **3. Build the Application Using Maven**
+
+Run Maven to build the application:
+
+```bash
+mvn clean package
+```
+
+This will generate a WAR file in the `target/` directory.
+
+
+
+### **5. Dockerize the Application**
+
+Create a Dockerfile in the project root with the following content:
+
+```dockerfile
+FROM custom-tomcat:latest
+COPY target/java-web-app.war /usr/local/tomcat/webapps/
+```
+
+Build the Docker image:
+
+```bash
+docker build -t java-web-app:1.0 .
+```
+
+Test the image locally:
+
+```bash
+docker run -d -p 8080:8080 java-web-app:1.0
+```
+
+Access the application at http://localhost:8080/java-web-app/.
+
+### **6. Deploy the Image to a Public Registry**
+
+Log in to Docker Hub:
+
+```bash
+docker login
+```
+
+Tag and push the image:
+
+```bash
+docker tag java-web-app:1.0 yourdockerhubusername/java-web-app:1.0
+docker push yourdockerhubusername/java-web-app:1.0
+```
+
+### **7. Create a Kubernetes Cluster (Minikube)**
+
+Start Minikube:
+
+```bash
+minikube start
+```
+
+Verify the cluster is running:
+
+```bash
+kubectl get nodes
+```
+
+### **8. Create Deployment and Service Manifest Files**
+
+Create a `deployment.yaml` file:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-web-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: java-web-app
+  template:
+    metadata:
+      labels:
+        app: java-web-app
+    spec:
+      containers:
+      - name: java-web-app
+        image: yourdockerhubusername/java-web-app:1.0
+        ports:
+        - containerPort: 8080
+```
+
+Create a `service.yaml` file:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-web-app-service
+spec:
+  selector:
+    app: java-web-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: LoadBalancer
+```
+
+### **9. Deploy the Microservice to Kubernetes and Test the Application**
+
+Apply the manifests:
+
+```bash
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+```
+
+Check the status of the deployment and service:
+
+```bash
+kubectl get pods
+kubectl get svc
+```
+
+Access the application via the Minikube LoadBalancer:
+
+```bash
+minikube service java-web-app-service
+```
+
+This will open the application in your default browser.
+
+---
+
+## **Conclusion**
+
+You have successfully built, Dockerized, and deployed a Java web application to a Kubernetes cluster. Congratulations on completing this tutorial!
+
