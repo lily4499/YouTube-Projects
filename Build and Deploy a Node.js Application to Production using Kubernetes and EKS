@@ -265,3 +265,36 @@ Access the application in your browser using the `EXTERNAL-IP`.
 
 Congratulations! You have successfully built, dockerized, and deployed a Node.js application to production using Kubernetes and EKS.
 
+
+###################################################################################
+
+un this command to open the file in a text editor:
+
+bash
+Copy code
+nano ~/.bashrc
+Add the Following Environment Variables and Alias: Append the following lines to your profile file:
+
+bash
+Copy code
+# AWS ECR Configuration
+export AWS_REGION="us-east-1"
+export AWS_ACCOUNT_ID="637423529262"
+
+# Alias for ECR Login
+alias ecr-login='aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com'
+Save and Exit:
+
+In nano, press CTRL+O, then Enter to save.
+Press CTRL+X to exit.
+Apply the Changes: Run this command to reload your shell profile:
+
+bash
+Copy code
+source ~/.bashrc
+Use the Alias: Now, you can log in to your AWS ECR by simply running:
+
+bash
+Copy code
+ecr-login
+
