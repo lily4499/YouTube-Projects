@@ -144,10 +144,25 @@ EXPOSE 3000
 CMD ["node", "app.js"]
 ```
 
+------------------------------------------------------------
+3. Build he Docker image:
+
+```bash
+docker build -t my-node-app .
+
+4. Run the Docker Container
+Start a container from the image and map the necessary port:
+
+docker run -d -p 3000:3000 --name my-node-app my-node-app:latest
+
+
+##################################
+
+
 ### 7. Build and Push Image to a Docker Registry (ECR)
 1. Authenticate Docker with ECR:
 ```bash
-aws ecr get-login-password --region <your-region> | docker login --username AWS --password-stdin <account-id>.dkr.ecr.<your-region>.amazonaws.com
+aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 ```
 
 2. Create an ECR repository:
@@ -155,19 +170,18 @@ aws ecr get-login-password --region <your-region> | docker login --username AWS 
 aws ecr create-repository --repository-name my-node-app
 ```
 
-3. Build and tag the Docker image:
+3.tag the Docker image:
 ```bash
-docker build -t my-node-app .
-docker tag my-node-app:latest <account-id>.dkr.ecr.<your-region>.amazonaws.com/my-node-app:latest
+docker tag my-node-app:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-node-app:latest
 ```
 
 4. Push the image:
 ```bash
-docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION .amazonaws.com/my-node-app:latest
+docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-node-app:latest
 ```
 
 ### 8. Create a Kubernetes Manifest File
-Create a `kubernetes/deployment.yaml` file:
+Create a mkdir kubernetess/deployment.yaml` file:
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -185,7 +199,7 @@ spec:
     spec:
       containers:
       - name: my-node-app
-        image: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION .amazonaws.com/my-node-app:latest
+        image: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/my-node-app:latest
       imagePullSecrets:
       - name: ecr-secret
         ports:
@@ -207,11 +221,11 @@ spec:
 ### 9. Create a Kubernetes Cluster Using `eksctl`
 Create a cluster:
 ```bash
-eksctl create cluster --name my-node-cluster --region <your-region> --nodes 1 --node-type t4g.micro
+eksctl create cluster --name eks-cluster --region $AWS_REGION --nodes 1 --node-type t4g.micro
 or
 eksctl create cluster \
-  --name my-cluster \
-  --region us-east-1 \
+  --name eks-cluster \
+  --region $AWS_REGION \
   --version 1.27 \
   --nodegroup-name managed-node-group \
   --node-type t3.medium \
@@ -221,18 +235,24 @@ eksctl create cluster \
   --managed
 
 ```
+kubectl get nodes
+
+###To configure your kubectl to interact with the new cluster:
+aws eks update-kubeconfig --region $AWS_REGION --name eks-cluster
+###Verify that kubectl is connected to your cluster:
+kubectl cluster-info
 
 Configure `kubectl` to use the new cluster:
 ```bash
-aws eks update-kubeconfig --region <your-region> --name my-node-cluster
+aws eks update-kubeconfig --region $AWS_REGION --name eks-cluster
 ```
 ### 10. Set Up  EKS nodes to pull images from ECR
 Create a Docker registry secret (my-pull-secret) for AWS Elastic Container Registry (ECR)
-kubectl create secret docker-registry my-pull-secret \
-  --docker-server=<account_id>.dkr.ecr.<region>.amazonaws.com \
+kubectl create secret docker-registry ecr-secret \
+  --docker-server=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com \
   --docker-username=AWS \
-  --docker-password=$(aws ecr get-login-password --region <region>) \
-  --docker-email=<email>
+  --docker-password=$(aws ecr get-login-password --region $AWS_REGION) \
+  --docker-email=liane3002@gmail.com
 
 Then reference this secret in your Pod or Deployment YAML under imagePullSecrets:
 ```yaml
@@ -253,8 +273,15 @@ kubectl apply -f kubernetes/deployment.yaml
 
 Verify deployment:
 ```bash
+kubectl get deployments
+kubectl describe deployment <deployment-name>
 kubectl get pods
+kubectl describe pod <pod-name>
+kubectl logs <pod-name>
 kubectl get svc
+kubectl get all
+kubectl scale deployment <deployment-name> --replicas=3
+
 ```
 
 ### 12. Test Your Deployed Application
